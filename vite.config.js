@@ -3,6 +3,6 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  base: "/tournament-bracket/",
+  base: "/tournament-maker/",
   plugins: [react(), tailwindcss()],
 });

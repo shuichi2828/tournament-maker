@@ -131,7 +131,15 @@ function makeShareUrl(state) {
 
 function computeRounds(slots, winners) {
   const rounds = [];
-  let current = slots;
+
+  const emptyNode = { player: null, pending: false, empty: true };
+
+  let current = slots.map((slot) =>
+    slot
+      ? { player: slot, pending: false, empty: false }
+      : { player: null, pending: false, empty: true }
+  );
+
   let roundIndex = 0;
 
   while (current.length > 1) {
@@ -139,27 +147,51 @@ function computeRounds(slots, winners) {
     const next = [];
 
     for (let i = 0; i < current.length; i += 2) {
-      const p1 = current[i] || null;
-      const p2 = current[i + 1] || null;
+      const left = current[i] || emptyNode;
+      const right = current[i + 1] || emptyNode;
+
+      const p1 = left.player;
+      const p2 = right.player;
+
       const key = `${roundIndex}-${i / 2}`;
       const selectedId = winners[key];
+
       let winner = null;
       let auto = false;
 
-      // BYEによる自動通過は「1回戦だけ」に限定する
-      // 2回戦以降の null は「前の試合の勝者待ち」なので、自動通過させない
-      if (roundIndex === 0 && p1 && !p2) {
+      if (p1 && p2 && selectedId && (selectedId === p1.id || selectedId === p2.id)) {
+        winner = selectedId === p1.id ? p1 : p2;
+      } else if (p1 && right.empty && !right.pending) {
         winner = p1;
         auto = true;
-      } else if (roundIndex === 0 && !p1 && p2) {
+      } else if (p2 && left.empty && !left.pending) {
         winner = p2;
         auto = true;
-      } else if (p1 && p2 && selectedId && (selectedId === p1.id || selectedId === p2.id)) {
-        winner = selectedId === p1.id ? p1 : p2;
       }
 
-      matches.push({ key, p1, p2, winner, auto, roundIndex, matchIndex: i / 2 });
-      next.push(winner);
+      matches.push({
+        key,
+        p1,
+        p2,
+        p1Pending: left.pending,
+        p2Pending: right.pending,
+        winner,
+        auto,
+        roundIndex,
+        matchIndex: i / 2,
+      });
+
+      const hasPotentialPlayer = Boolean(
+        p1 || p2 || left.pending || right.pending
+      );
+
+      if (winner) {
+        next.push({ player: winner, pending: false, empty: false });
+      } else if (hasPotentialPlayer) {
+        next.push({ player: null, pending: true, empty: false });
+      } else {
+        next.push(emptyNode);
+      }
     }
 
     rounds.push(matches);
@@ -169,7 +201,6 @@ function computeRounds(slots, winners) {
 
   return rounds;
 }
-
 function roundName(index, total) {
   if (index === total - 1) return "決勝";
   if (index === total - 2) return "準決勝";
@@ -183,11 +214,11 @@ function roundClass(index, total) {
   return "border-slate-200 bg-white shadow-slate-200/60";
 }
 
-function PlayerButton({ player, opponent, winner, auto, disabled, onPick }) {
+function PlayerButton({ player, pending, opponent, winner, auto, disabled, onPick }) {
   if (!player) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-400">
-        BYE
+        {pending ? "勝者待ち" : "BYE"}
       </div>
     );
   }
@@ -218,7 +249,6 @@ function PlayerButton({ player, opponent, winner, auto, disabled, onPick }) {
     </button>
   );
 }
-
 function ChampionCelebration({ champion }) {
   if (!champion) return null;
   const particles = Array.from({ length: 64 }, (_, i) => i);
@@ -361,11 +391,39 @@ export default function TournamentBracketShareTool() {
     }
   };
 
-  const pickWinner = (match, player) => {
-    if (!match.p1 || !match.p2 || match.auto) return;
-    setWinners((prev) => ({ ...prev, [match.key]: player.id }));
-    setUrlMessage(`${player.name}を勝者にしました。URLにも反映されます。`);
-  };
+  const clearWinnerPath = (prev, match, totalRounds) => {
+  const next = { ...prev };
+
+  let round = match.roundIndex;
+  let matchIndex = match.matchIndex;
+
+  while (round < totalRounds) {
+    delete next[`${round}-${matchIndex}`];
+    round += 1;
+    matchIndex = Math.floor(matchIndex / 2);
+  }
+
+  return next;
+};
+
+const pickWinner = (match, player) => {
+  if (!match.p1 || !match.p2 || match.auto) return;
+
+  setWinners((prev) => {
+    const next = clearWinnerPath(prev, match, rounds.length);
+    next[match.key] = player.id;
+    return next;
+  });
+
+  setUrlMessage(`${player.name}を勝者にしました。URLにも反映されます。`);
+};
+
+const undoWinner = (match) => {
+  if (!match.winner || match.auto) return;
+
+  setWinners((prev) => clearWinnerPath(prev, match, rounds.length));
+  setUrlMessage("勝者選択を取り消しました。後続ラウンドの結果もリセットしました。");
+};
 
   const copyShareUrl = async () => {
     try {
@@ -557,6 +615,7 @@ export default function TournamentBracketShareTool() {
                               <div className="space-y-2">
                                 <PlayerButton
                                   player={match.p1}
+                                   pending={match.p1Pending}
                                   opponent={match.p2}
                                   winner={match.winner}
                                   auto={match.auto}
@@ -566,6 +625,7 @@ export default function TournamentBracketShareTool() {
                                 <div className="text-center text-xs font-black text-slate-400">VS</div>
                                 <PlayerButton
                                   player={match.p2}
+                                  pending={match.p2Pending}
                                   opponent={match.p1}
                                   winner={match.winner}
                                   auto={match.auto}
@@ -581,6 +641,16 @@ export default function TournamentBracketShareTool() {
                                   ? "勝者をクリックして選択"
                                   : "前の試合の勝者待ち"}
                               </div>
+                                {match.winner && !match.auto && (
+                                  <button
+                                    type="button"
+                                    onClick={() => undoWinner(match)}
+                                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                  >
+                                    <RotateCcw className="h-3 w-3" />
+                                    この試合の勝者を戻す
+                                  </button>
+                                )}
                             </motion.div>
                           );
                         })}

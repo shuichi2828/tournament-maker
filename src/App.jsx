@@ -146,10 +146,12 @@ function computeRounds(slots, winners) {
       let winner = null;
       let auto = false;
 
-      if (p1 && !p2) {
+      // BYEによる自動通過は「1回戦だけ」に限定する
+      // 2回戦以降の null は「前の試合の勝者待ち」なので、自動通過させない
+      if (roundIndex === 0 && p1 && !p2) {
         winner = p1;
         auto = true;
-      } else if (!p1 && p2) {
+      } else if (roundIndex === 0 && !p1 && p2) {
         winner = p2;
         auto = true;
       } else if (p1 && p2 && selectedId && (selectedId === p1.id || selectedId === p2.id)) {

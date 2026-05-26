@@ -296,7 +296,7 @@ function ChampionCelebration({ champion }) {
 }
 
 export default function TournamentBracketShareTool() {
-  const [title, setTitle] = useState("最強トーナメント");
+  const [title, setTitle] = useState("トーナメント表作成ツール");
   const [playersText, setPlayersText] = useState(SAMPLE_PLAYERS);
   const [mode, setMode] = useState("seeded");
   const [randomSeed, setRandomSeed] = useState(20260526);
@@ -516,7 +516,7 @@ const undoWinner = (match) => {
                 value={playersText}
                 onChange={(e) => setPlayersText(e.target.value)}
                 className="h-64 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                placeholder="例：\n1. 佐藤\n2. 鈴木\n3. 田中"
+                placeholder="例：はしもとかんな、ほんだつばさ"
               />
               <p className="mt-2 text-xs text-slate-500">
                 「1. 名前」のように書くと、その数字をシード順位として扱います。数字なしなら上から順にシード扱いです。
